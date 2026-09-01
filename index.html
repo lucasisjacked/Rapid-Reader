@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Rapid Reader — RSVP</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&family=Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700&display=swap" rel="stylesheet">
+<style>
+/* ─────────────────────────────────────────────────────────────
+   The Rapid Reader — a paper-and-ink RSVP machine
+   ───────────────────────────────────────────────────────────── */
+
+:root{
+  --paper:      #F4F0E6;
+  --paper-deep: #EAE3D4;
+  --ink:        #1A1714;
+  --ink-red:    #C1272D;
+  --ink-mute:   #8A8175;
+  --rule:       rgba(26,23,20,.30);
+  --rule-hair:  rgba(26,23,20,.14);
+
+  --font-word:    'Newsreader','Iowan Old Style','Palatino Linotype',Palatino,Georgia,serif;
+  --font-display: 'Instrument Serif','Newsreader',Georgia,serif;
+  --font-meta:    'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+
+  --word-size: 72px;
+}
+
+*{ box-sizing:border-box; margin:0; padding:0; }
+
+html{ -webkit-text-size-adjust:100%; }
+
+body{
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-word);
+  min-height:100vh;
+  display:flex;
+  justify-content:center;
+  padding: 34px 24px 46px;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* Paper tooth ------------------------------------------------ */
+body::before{
+  content:''; position:fixed; inset:0; z-index:90;
+  pointer-events:none; mix-blend-mode:multiply; opacity:.30;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='260' height='260' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E");
+}
+/* Edge burn -------------------------------------------------- */
+body::after{
+  content:''; position:fixed; inset:0; z-index:89; pointer-events:none;
+  background: radial-gradient(125% 105% at 50% 42%, transparent 52%, rgba(96,78,50,.13) 100%);
+}
+
+.sheet{
+  width:100%; max-width:1000px;
+  display:flex; flex-direction:column;
+  position:relative; z-index:1;
+}
+
+/* ── Rules ──────────────────────────────────────────────────── */
+.rule{ height:1px; background:var(--rule-hair); transform-origin:left center; }
+.rule.heavy{ height:3px; background:var(--ink); }
+.rule.mid{ height:1px; background:var(--rule); }
+
+/* ── Nameplate ──────────────────────────────────────────────── */
+.nameplate{ margin-bottom:38px; }
+.title{
+  font-family: var(--font-display);
+  font-weight:400;
+  font-size: clamp(40px, 7.4vw, 74px);
+  line-height:1.02;
+  letter-spacing:-.015em;
+  text-align:center;
+  padding: 16px 0 12px;
+}
+.title em{ font-style:italic; color:var(--ink-red); }
+
+.dateline{
+  font-family:var(--font-meta);
+  font-size:10px; letter-spacing:.17em; text-transform:uppercase;
+  color:var(--ink-mute);
+  display:flex; justify-content:space-between; gap:16px;
+  padding: 9px 2px 10px;
+  border-top:1px solid var(--rule-hair);
+  flex-wrap:wrap;
+}
+.dateline .dl-r{ color:var(--ink); }
+
+/* ── Views ──────────────────────────────────────────────────── */
+main{ position:relative; flex:1; }
+.view{
+  position:absolute; top:0; left:0; right:0;
+  opacity:0; visibility:hidden; pointer-events:none;
+  transform: translateY(8px);
+  transition: opacity .34s ease, transform .34s ease, visibility 0s linear .34s;
+}
+.view.is-active{
+  position:relative;
+  opacity:1; visibility:visible; pointer-events:auto;
+  transform:none;
+  transition: opacity .34s ease .04s, transform .34s ease .04s, visibility 0s;
+}
+
+/* ── Column labels ──────────────────────────────────────────── */
+.col-label{
+  display:flex; justify-content:space-between; align-items:baseline;
+  font-family:var(--font-meta);
+  font-size:10px; letter-spacing:.17em; text-transform:uppercase;
+  color:var(--ink-mute);
+  padding-bottom:8px;
+}
+
+/* ── Compose ────────────────────────────────────────────────── */
+#input{
+  width:100%; min-height: 300px; resize:vertical;
+  background: rgba(255,255,255,.42);
+  border:1px solid var(--rule);
+  border-radius:2px;
+  padding: 22px 26px;
+  font-family: var(--font-word);
+  font-size: 18px; line-height:1.72;
+  color:var(--ink);
+  outline:none;
+  box-shadow: inset 0 1px 3px rgba(26,23,20,.05);
+  transition: border-color .2s ease, background .2s ease;
+}
+#input:focus{ border-color: var(--ink); background: rgba(255,255,255,.62); }
+#input::placeholder{ color:var(--ink-mute); font-style:italic; }
+
+.compose-actions{
+  display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+  margin-top:18px;
+}
+
+/* One line of plain talk: what just happened, or what went wrong. */
+.notice{
+  font-family:var(--font-meta);
+  font-size:10px; letter-spacing:.15em; text-transform:uppercase;
+  color:var(--ink-mute);
+  margin-top:16px; min-height:14px;
+  opacity:0; transition:opacity .22s ease;
+}
+.notice.is-on{ opacity:1; }
+.notice.is-warn{ color:var(--ink-red); }
+
+.btn{
+  font-family:var(--font-meta);
+  font-size:11px; letter-spacing:.15em; text-transform:uppercase;
+  padding: 12px 22px;
+  border:1px solid var(--ink);
+  background:transparent; color:var(--ink);
+  cursor:pointer; border-radius:2px;
+  transition: background .18s ease, color .18s ease, transform .12s ease;
+}
+.btn:hover{ background:var(--ink); color:var(--paper); }
+.btn:active{ transform: translateY(1px); }
+.btn-primary{ background:var(--ink); color:var(--paper); }
+.btn-primary:hover{ background:var(--ink-red); border-color:var(--ink-red); }
+.btn-ghost{ border-color:var(--rule); color:var(--ink-mute); }
+.btn-ghost:hover{ background:var(--ink-mute); border-color:var(--ink-mute); color:var(--paper); }
+
+/* ── The stage ──────────────────────────────────────────────── */
+.stage{
+  position:relative;
+  height: clamp(210px, 34vh, 300px);
+  display:flex; align-items:center; justify-content:center;
+  border-top:1px solid var(--rule);
+  border-bottom:1px solid var(--rule);
+  background: linear-gradient(180deg, rgba(255,255,255,.34), rgba(255,255,255,.12));
+  overflow:hidden;
+}
+
+/* printed column measure */
+.measure{ position:absolute; top:0; bottom:0; width:1px; background:var(--rule-hair); }
+.measure.l{ left: 5%; }
+.measure.r{ right: 5%; }
+
+/* registration / crop marks on the pivot column */
+.crop{
+  position:absolute; left:50%; width:1px;
+  background:var(--ink-red); opacity:.55;
+  transform: translateX(-50%);
+}
+.crop.t{ top:0; height:26px; }
+.crop.b{ bottom:0; height:26px; }
+.crop::after{
+  content:''; position:absolute; left:50%; width:13px; height:1px;
+  background:var(--ink-red); transform:translateX(-50%);
+}
+.crop.t::after{ bottom:0; }
+.crop.b::after{ top:0; }
+
+/* THE WORD — three-column grid pins the pivot to dead centre */
+.word{
+  display:grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: baseline;
+  width:100%;
+  font-family: var(--font-word);
+  font-weight:400;
+  font-size: min(var(--word-size), 13.5vw);
+  line-height:1.18;
+  letter-spacing:-.005em;
+  transition: opacity .25s ease;
+}
+/* min-width:0 lets the 1fr columns shrink below their content, so an
+   over-long word overflows outward instead of shoving the pivot sideways */
+.word .pre { text-align:right;  white-space:pre; min-width:0; }
+.word .piv { text-align:center; white-space:pre; min-width:0; color:var(--ink-red); }
+.word .post{ text-align:left;   white-space:pre; min-width:0; }
+
+.endmark{
+  position:absolute;
+  font-family:var(--font-meta);
+  font-size:16px; letter-spacing:.42em; color:var(--ink-mute);
+  opacity:0; transition:opacity .3s ease; pointer-events:none;
+}
+.stage.is-done .word{ opacity:0; }
+.stage.is-done .endmark{ opacity:1; }
+
+/* ── Transport ──────────────────────────────────────────────── */
+.transport{ padding-top:20px; }
+.scrub-wrap{ padding: 0 2px; }
+
+input[type=range]{
+  -webkit-appearance:none; appearance:none;
+  width:100%; background:transparent; cursor:pointer; display:block;
+}
+input[type=range]::-webkit-slider-runnable-track{
+  height:3px; background:var(--rule-hair);
+}
+input[type=range]::-moz-range-track{
+  height:3px; background:var(--rule-hair);
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none; appearance:none;
+  width:3px; height:19px; margin-top:-8px;
+  background:var(--ink-red); border:none; border-radius:0;
+}
+input[type=range]::-moz-range-thumb{
+  width:3px; height:19px;
+  background:var(--ink-red); border:none; border-radius:0;
+}
+input[type=range]:focus-visible::-webkit-slider-thumb{ box-shadow:0 0 0 3px rgba(193,39,45,.22); }
+
+.scrub-meta{
+  display:flex; justify-content:space-between;
+  font-family:var(--font-meta); font-size:10px;
+  letter-spacing:.15em; text-transform:uppercase;
+  color:var(--ink-mute);
+  margin-top:10px;
+}
+.scrub-meta .pos{ color:var(--ink); }
+
+.buttons{
+  display:flex; align-items:center; justify-content:center;
+  gap:6px; margin: 22px 0 6px;
+}
+.buttons button{
+  font-family:var(--font-meta);
+  width:44px; height:44px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:14px; line-height:1;
+  background:transparent; color:var(--ink);
+  border:1px solid var(--rule-hair); border-radius:2px;
+  cursor:pointer;
+  transition: background .16s ease, color .16s ease, border-color .16s ease;
+}
+.buttons button:hover{ border-color:var(--ink); background:rgba(26,23,20,.05); }
+.buttons button:active{ transform:translateY(1px); }
+.buttons .play{
+  width:62px; height:62px; font-size:17px; margin:0 8px;
+  background:var(--ink); color:var(--paper); border-color:var(--ink);
+}
+.buttons .play:hover{ background:var(--ink-red); border-color:var(--ink-red); }
+.buttons .step{ font-size:22px; padding-bottom:3px; }
+
+/* ── Dials ──────────────────────────────────────────────────── */
+.dials{
+  display:grid; grid-template-columns: 1fr auto; gap:34px;
+  align-items:end;
+  border-top:1px solid var(--rule-hair);
+  margin-top:22px; padding-top:20px;
+}
+.dial label{
+  display:block;
+  font-family:var(--font-meta); font-size:10px;
+  letter-spacing:.17em; text-transform:uppercase; color:var(--ink-mute);
+  margin-bottom:14px;
+}
+.dial-body{ display:flex; align-items:center; gap:20px; }
+.dial-body input[type=range]{ flex:1; }
+
+.wpm-readout{ display:flex; align-items:baseline; gap:7px; }
+#wpm-num{
+  font-family:var(--font-meta); font-weight:500;
+  font-size:30px; width:3.1em; text-align:right;
+  background:transparent; border:none; border-bottom:1px solid var(--rule);
+  color:var(--ink); padding:0 0 2px; outline:none;
+  -moz-appearance:textfield;
+}
+#wpm-num::-webkit-outer-spin-button,
+#wpm-num::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
+#wpm-num:focus{ border-bottom-color:var(--ink-red); }
+.unit{
+  font-family:var(--font-meta); font-size:10px;
+  letter-spacing:.17em; color:var(--ink-mute);
+}
+.dial-sm{ width:170px; }
+
+/* ── Legend ─────────────────────────────────────────────────── */
+.legend{
+  display:flex; flex-wrap:wrap; gap:8px 26px;
+  font-family:var(--font-meta); font-size:10px;
+  letter-spacing:.09em; text-transform:uppercase; color:var(--ink-mute);
+  border-top:1px solid var(--rule-hair);
+  margin-top:26px; padding-top:16px;
+}
+.legend span{ display:flex; align-items:center; gap:6px; }
+kbd{
+  font-family:var(--font-meta); font-size:9px;
+  border:1px solid var(--rule); border-bottom-width:2px;
+  border-radius:2px; padding:2px 5px;
+  color:var(--ink); background:rgba(255,255,255,.5);
+}
+
+/* ── Entrance ───────────────────────────────────────────────── */
+@keyframes draw { from{ transform:scaleX(0); } to{ transform:scaleX(1); } }
+@keyframes rise { from{ opacity:0; transform:translateY(11px); } to{ opacity:1; transform:none; } }
+
+.nameplate .rule.heavy{ animation: draw .82s cubic-bezier(.2,.75,.25,1) both .05s; }
+.nameplate .rule.mid  { animation: draw .82s cubic-bezier(.2,.75,.25,1) both .14s; }
+.title   { animation: rise .74s cubic-bezier(.2,.75,.25,1) both .22s; }
+.dateline{ animation: rise .74s cubic-bezier(.2,.75,.25,1) both .34s; }
+main     { animation: rise .80s cubic-bezier(.2,.75,.25,1) both .44s; }
+
+@media (prefers-reduced-motion: reduce){
+  *{ animation-duration:.001s !important; transition-duration:.001s !important; }
+}
+
+/* ── Narrow ─────────────────────────────────────────────────── */
+@media (max-width: 620px){
+  body{ padding:22px 16px 34px; }
+  .dials{ grid-template-columns:1fr; gap:22px; }
+  .dial-sm{ width:100%; }
+  .dateline{ font-size:9px; gap:6px; }
+  .buttons{ gap:4px; }
+  .buttons button{ width:40px; height:40px; }
+  .buttons .play{ width:56px; height:56px; }
+  .measure.l{ left:2%; } .measure.r{ right:2%; }
+}
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <header class="nameplate">
+    <div class="rule heavy"></div>
+    <h1 class="title">The <em>Rapid</em> Reader</h1>
+    <div class="dateline">
+      <span class="dl-l">Rapid Serial Visual Presentation</span>
+      <span class="dl-r" id="dateline">No copy set</span>
+    </div>
+    <div class="rule mid"></div>
+  </header>
+
+  <main>
+
+    <!-- ── COMPOSE ─────────────────────────────────────────── -->
+    <section class="view is-active" id="view-compose">
+      <div class="col-label">
+        <span>Copy</span>
+        <span id="compose-count">0 words</span>
+      </div>
+      <textarea id="input" spellcheck="false" placeholder="Paste your text here…"></textarea>
+      <div class="compose-actions">
+        <button class="btn btn-primary" id="btn-begin">Begin Reading</button>
+        <button class="btn btn-ghost" id="btn-paste" hidden>Paste from clipboard</button>
+        <button class="btn btn-ghost" id="btn-sample">Load sample</button>
+        <button class="btn btn-ghost" id="btn-clear">Clear</button>
+      </div>
+      <p class="notice" id="notice" role="status" aria-live="polite"></p>
+    </section>
+
+    <!-- ── READER ──────────────────────────────────────────── -->
+    <section class="view" id="view-read">
+      <div class="col-label">
+        <span>Now Reading</span>
+        <span id="read-title">—</span>
+      </div>
+
+      <div class="stage" id="stage">
+        <div class="measure l"></div>
+        <div class="measure r"></div>
+        <div class="crop t"></div>
+        <div class="crop b"></div>
+        <div class="word" id="word"><span class="pre"></span><span class="piv"></span><span class="post"></span></div>
+        <div class="endmark">— 30 —</div>
+      </div>
+
+      <div class="transport">
+        <div class="scrub-wrap">
+          <input type="range" id="scrub" min="0" max="0" value="0" step="1" aria-label="Position in text">
+          <div class="scrub-meta">
+            <span class="pos" id="pos-read">word 0 / 0</span>
+            <span id="remain-read">—</span>
+          </div>
+        </div>
+
+        <div class="buttons">
+          <button data-act="start"    title="Jump to start (Home)"           aria-label="Jump to start">&#9198;</button>
+          <button data-act="prevsent" title="Previous sentence (Shift + Left)"  aria-label="Previous sentence">&#9194;</button>
+          <button data-act="prevword" title="Previous word (Left)" class="step" aria-label="Previous word">&lsaquo;</button>
+          <button data-act="play" id="btn-play" class="play" title="Play / pause (Space)" aria-label="Play">&#9654;</button>
+          <button data-act="nextword" title="Next word (Right)" class="step"     aria-label="Next word">&rsaquo;</button>
+          <button data-act="nextsent" title="Next sentence (Shift + Right)"      aria-label="Next sentence">&#9193;</button>
+        </div>
+
+        <div class="dials">
+          <div class="dial">
+            <label for="wpm-range">Speed</label>
+            <div class="dial-body">
+              <input type="range" id="wpm-range" min="100" max="1200" step="10" value="300">
+              <div class="wpm-readout">
+                <input type="number" id="wpm-num" min="50" max="2000" step="10" value="300" aria-label="Words per minute">
+                <span class="unit">wpm</span>
+              </div>
+            </div>
+          </div>
+          <div class="dial dial-sm">
+            <label for="size-range">Type size</label>
+            <input type="range" id="size-range" min="30" max="150" step="2" value="72">
+          </div>
+        </div>
+
+        <footer class="legend">
+          <span><kbd>Space</kbd> play / pause</span>
+          <span><kbd>&larr;</kbd><kbd>&rarr;</kbd> step word</span>
+          <span><kbd>Shift</kbd>+<kbd>&larr;</kbd><kbd>&rarr;</kbd> jump sentence</span>
+          <span><kbd>&uarr;</kbd><kbd>&darr;</kbd> speed &plusmn;10</span>
+          <span><kbd>Home</kbd> restart</span>
+          <span><kbd>Esc</kbd> edit copy</span>
+        </footer>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+var $ = function(s){ return document.querySelector(s); };
+
+var el = {
+  input:    $('#input'),
+  count:    $('#compose-count'),
+  notice:   $('#notice'),
+  dateline: $('#dateline'),
+  readTitle:$('#read-title'),
+  vCompose: $('#view-compose'),
+  vRead:    $('#view-read'),
+  stage:    $('#stage'),
+  word:     $('#word'),
+  pre:      $('#word .pre'),
+  piv:      $('#word .piv'),
+  post:     $('#word .post'),
+  scrub:    $('#scrub'),
+  pos:      $('#pos-read'),
+  remain:   $('#remain-read'),
+  play:     $('#btn-play'),
+  wpmRange: $('#wpm-range'),
+  wpmNum:   $('#wpm-num'),
+  sizeRange:$('#size-range')
+};
+
+/* ── State ──────────────────────────────────────────────────── */
+var words     = [];
+var sentences = [0];
+var idx       = 0;
+var wpm       = 300;
+var playing   = false;
+var finished  = false;
+var raf       = null;
+var nextAt    = 0;
+var mode      = 'compose';
+
+var SAMPLE = 'Reading, as most of us learned it, is a physical act. The eye does not glide across a line of text; it jumps, stopping four or five times per line, and nearly a third of that time is spent moving rather than seeing. Rapid serial visual presentation removes the jumping entirely. Words arrive at a fixed point, one after another, and the eye simply holds still. The red letter marks the optimal recognition point — the spot the brain naturally lands on when identifying a word. Keep your gaze there and the words will assemble themselves. Start slower than you think you need to. Two hundred and fifty words a minute is a comfortable place to begin; most readers find they can push well past four hundred within a few minutes.';
+
+/* ── Optimal Recognition Point ──────────────────────────────── */
+
+// Letters and digits in any script. The old Latin-1 range meant Cyrillic,
+// Greek, Arabic and CJK words found no letter at all and pivoted on their
+// last character. Older engines fall back to the ASCII range.
+var LETTER = (function(){
+  try { return new RegExp('[\\p{L}\\p{N}]', 'u'); }
+  catch (e) { return /[0-9A-Za-zÀ-ɏ]/; }
+})();
+
+// Code points, not UTF-16 units, so an emoji is never cut in half into a
+// pair of broken surrogates.
+function chars(word){
+  return typeof Array.from === 'function' ? Array.from(word) : String(word).split('');
+}
+
+function pivotAt(cs){
+  // Skip leading quotes/brackets so ("Hello) pivots like (Hello).
+  var off = 0;
+  while (off < cs.length - 1 && !LETTER.test(cs[off])) off++;
+  var core = cs.length - off, i;
+  if      (core <=  1) i = 0;
+  else if (core <=  5) i = 1;
+  else if (core <=  9) i = 2;
+  else if (core <= 13) i = 3;
+  else                 i = 4;
+  return Math.min(off + i, cs.length - 1);
+}
+
+// Returns a code-point index into the word.
+function pivotIndex(word){ return pivotAt(chars(String(word))); }
+
+/* ── Text ───────────────────────────────────────────────────── */
+function tokenize(text){
+  var t = String(text || '').trim();
+  return t ? t.split(/\s+/) : [];
+}
+
+function buildSentences(w){
+  var list = [0], end = /[.!?]["'’”)\]]*$/;
+  for (var i = 1; i < w.length; i++){
+    if (end.test(w[i - 1])) list.push(i);
+  }
+  return list;
+}
+
+/* ── Formatting ─────────────────────────────────────────────── */
+function commas(n){ return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+
+function clock(sec){
+  sec = Math.max(0, Math.round(sec));
+  var m = Math.floor(sec / 60), s = sec % 60;
+  return m + ':' + (s < 10 ? '0' : '') + s;
+}
+
+/* ── Render ─────────────────────────────────────────────────── */
+// True rendered width of a span's text, ignoring its (possibly clipped) box.
+function textWidth(node){
+  if (!node.firstChild) return 0;
+  var r = document.createRange();
+  r.selectNodeContents(node);
+  return r.getBoundingClientRect().width;
+}
+
+// The word is laid out symmetrically about the pivot, so it needs
+// 2 x (longest half). Scale the type down if that exceeds the stage.
+function fitWord(){
+  el.word.style.fontSize = '';
+  var avail = el.stage.clientWidth - 32;
+  if (avail <= 0) return;
+  var halfPiv = textWidth(el.piv) / 2;
+  var need = 2 * (Math.max(textWidth(el.pre), textWidth(el.post)) + halfPiv);
+  if (need > avail){
+    var base = parseFloat(getComputedStyle(el.word).fontSize);
+    el.word.style.fontSize = Math.max(14, base * avail / need) + 'px';
+  }
+}
+
+function render(){
+  var cs = chars(words[idx] || '');
+  var p  = pivotAt(cs);
+  el.pre.textContent  = cs.slice(0, p).join('');
+  el.piv.textContent  = cs[p] || '';
+  el.post.textContent = cs.slice(p + 1).join('');
+  fitWord();
+  updateReadouts();
+}
+
+function updateReadouts(){
+  var total = words.length;
+  el.scrub.value = idx;
+  el.pos.textContent = 'word ' + commas(Math.min(idx + 1, total)) + ' / ' + commas(total);
+  var left = Math.max(0, total - 1 - idx);
+  el.remain.textContent = left ? clock(left / wpm * 60) + ' remaining' : 'end of copy';
+}
+
+var noticeTimer = null;
+function notice(msg, warn){
+  if (noticeTimer){ clearTimeout(noticeTimer); noticeTimer = null; }
+  el.notice.textContent = msg || '';
+  el.notice.classList.toggle('is-warn', !!warn);
+  el.notice.classList.toggle('is-on',   !!msg);
+  if (msg) noticeTimer = setTimeout(function(){ el.notice.classList.remove('is-on'); }, 7000);
+}
+
+function updateDateline(){
+  if (!words.length){ el.dateline.textContent = 'No copy set'; return; }
+  el.dateline.textContent = commas(words.length) + ' words · ' +
+    clock(words.length / wpm * 60) + ' at ' + commas(wpm) + ' wpm';
+}
+
+function updatePlayBtn(){
+  el.play.innerHTML = playing ? '&#10074;&#10074;' : '&#9654;';
+  el.play.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+}
+
+/* ── Transport ──────────────────────────────────────────────── */
+function tick(now){
+  if (!playing) return;
+  var interval = 60000 / wpm;          // re-read every step: live WPM changes
+  if (now >= nextAt){
+    if (idx >= words.length - 1){ finish(); return; }
+    idx++;
+    render();
+    nextAt += interval;
+    if (now - nextAt > interval) nextAt = now + interval;   // resync after a stall
+  }
+  raf = requestAnimationFrame(tick);
+}
+
+function play(){
+  if (!words.length) return;
+  if (finished || idx >= words.length - 1) reset(false);
+  playing = true;
+  nextAt = performance.now() + 60000 / wpm;
+  updatePlayBtn();
+  raf = requestAnimationFrame(tick);
+}
+
+function pause(){
+  playing = false;
+  if (raf) cancelAnimationFrame(raf);
+  raf = null;
+  updatePlayBtn();
+}
+
+function toggle(){ if (playing) { pause(); } else { play(); } }
+
+function finish(){
+  playing = false;
+  if (raf) cancelAnimationFrame(raf);
+  raf = null;
+  finished = true;
+  el.stage.classList.add('is-done');
+  updatePlayBtn();
+}
+
+function clearDone(){
+  if (!finished) return;
+  finished = false;
+  el.stage.classList.remove('is-done');
+}
+
+function seek(i){
+  clearDone();
+  idx = Math.max(0, Math.min(words.length - 1, i));
+  render();
+  if (playing) nextAt = performance.now() + 60000 / wpm;
+}
+
+function reset(stop){
+  clearDone();
+  idx = 0;
+  if (stop) pause();
+  render();
+  if (playing) nextAt = performance.now() + 60000 / wpm;
+}
+
+function step(d){ pause(); seek(idx + d); }
+
+function sentenceJump(dir){
+  clearDone();
+  var k, cur = 0;
+  if (dir < 0){
+    for (k = 0; k < sentences.length; k++){
+      if (sentences[k] <= idx) cur = k; else break;
+    }
+    // Already sitting on a sentence start? Step back one further.
+    seek(sentences[cur] === idx && cur > 0 ? sentences[cur - 1] : sentences[cur]);
+  } else {
+    for (k = 0; k < sentences.length; k++){
+      if (sentences[k] > idx){ seek(sentences[k]); return; }
+    }
+    seek(words.length - 1);
+  }
+}
+
+/* ── Speed ──────────────────────────────────────────────────── */
+function setWpm(v, from){
+  wpm = Math.max(50, Math.min(2000, Math.round(v) || 300));
+  if (from !== 'range') el.wpmRange.value = Math.max(100, Math.min(1200, wpm));
+  if (from !== 'num')   el.wpmNum.value   = wpm;
+  updateDateline();
+  updateReadouts();
+  if (mode === 'compose') refreshCount();
+}
+
+function nudgeWpm(d){ setWpm(wpm + d); }
+
+/* ── Views ──────────────────────────────────────────────────── */
+function toRead(){
+  var w = tokenize(el.input.value);
+  if (!w.length){
+    notice('Nothing to read yet — paste or type some copy first', true);
+    el.input.focus();
+    return;
+  }
+  notice('');
+  words     = w;
+  sentences = buildSentences(w);
+  idx       = 0;
+  clearDone();
+  el.scrub.max = Math.max(0, words.length - 1);
+  el.readTitle.textContent = commas(words.length) + ' words';
+  updateDateline();
+  render();
+  mode = 'read';
+  el.vCompose.classList.remove('is-active');
+  el.vRead.classList.add('is-active');
+}
+
+function toCompose(){
+  pause();
+  mode = 'compose';
+  el.vRead.classList.remove('is-active');
+  el.vCompose.classList.add('is-active');
+  el.input.focus();
+}
+
+/* ── Compose wiring ─────────────────────────────────────────── */
+function refreshCount(){
+  var n = tokenize(el.input.value).length;
+  el.count.textContent = commas(n) + (n === 1 ? ' word' : ' words') +
+    (n ? ' · ' + clock(n / wpm * 60) + ' at ' + commas(wpm) + ' wpm' : '');
+}
+
+var IS_MAC = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent || '');
+var PASTE_KEY = IS_MAC ? 'Cmd+V' : 'Ctrl+V';
+
+// Drop text into the box and confirm what landed. Appends rather than
+// overwrites, so a second paste never silently eats the first.
+function insertCopy(txt){
+  txt = String(txt || '');
+  var added = tokenize(txt).length;
+  if (!added){
+    notice('That paste had no text in it', true);
+    el.input.focus();
+    return;
+  }
+  var cur = el.input.value;
+  el.input.value = cur.trim() ? cur.replace(/\s+$/, '') + '\n\n' + txt : txt;
+  refreshCount();
+  notice('Pasted ' + commas(added) + (added === 1 ? ' word' : ' words') +
+         ' — press Begin Reading');
+  el.input.focus();
+  try {
+    el.input.selectionStart = el.input.selectionEnd = el.input.value.length;
+    el.input.scrollTop = el.input.scrollHeight;
+  } catch (e) { /* selection is optional */ }
+}
+
+el.input.addEventListener('input', refreshCount);
+$('#btn-begin').addEventListener('click', toRead);
+$('#btn-sample').addEventListener('click', function(){
+  el.input.value = SAMPLE; refreshCount(); notice(''); el.input.focus();
+});
+$('#btn-clear').addEventListener('click', function(){
+  el.input.value = ''; refreshCount(); notice(''); el.input.focus();
+});
+
+// A paste only reaches the textarea when the textarea has focus. Click the
+// heading or anywhere else on the page first and the paste used to vanish
+// with no trace, which reads as "nothing happened". Catch it at the
+// document and route it into the box.
+document.addEventListener('paste', function(e){
+  if (mode !== 'compose') return;
+  var t = e.target, tag = t && t.tagName;
+  if (tag === 'TEXTAREA' || tag === 'INPUT') return;   // the field handles its own
+  var cd = e.clipboardData || window.clipboardData;
+  if (!cd) return;
+  var txt = cd.getData('text/plain') || cd.getData('text') || '';
+  if (!txt) return;
+  e.preventDefault();
+  insertCopy(txt);
+});
+
+// A paste straight into the box works on its own; this only reports it, so
+// a big paste that scrolls out of sight still gets a word count.
+el.input.addEventListener('paste', function(e){
+  var cd = e.clipboardData || window.clipboardData;
+  var txt = cd ? (cd.getData('text/plain') || cd.getData('text') || '') : '';
+  setTimeout(function(){
+    refreshCount();
+    var added = tokenize(txt).length;
+    if (added) notice('Pasted ' + commas(added) + (added === 1 ? ' word' : ' words') +
+                      ' — press Begin Reading');
+    else if (cd) notice('That paste had no text in it', true);
+  }, 0);
+});
+
+// Clipboard reads get blocked plenty of ways: no permission, a dismissed
+// prompt, an unfocused document, file:// on some browsers. Worse, a read
+// waiting on a permission prompt can sit pending forever and never reject,
+// which is what made this button look dead. Race it against a deadline and
+// always say something.
+(function(){
+  var btn = $('#btn-paste');
+  if (!navigator.clipboard || !navigator.clipboard.readText) return;
+  btn.hidden = false;
+
+  function fallback(){
+    notice('Could not read the clipboard — press ' + PASTE_KEY +
+           ' in the box instead', true);
+    el.input.focus();
+  }
+
+  btn.addEventListener('click', function(){
+    var done = false;
+    notice('Reading clipboard' + '\u2026');
+    var deadline = setTimeout(function(){
+      if (done) return;
+      done = true;
+      fallback();                     // pending forever, or waiting on a prompt
+    }, 2000);
+
+    navigator.clipboard.readText().then(function(txt){
+      if (done) return;               // the deadline already spoke; the prompt
+      done = true;                    // may still land, so honour a late read
+      clearTimeout(deadline);
+      if (txt && txt.trim()) insertCopy(txt);
+      else notice('Your clipboard is empty — copy some text first', true);
+    })['catch'](function(){
+      if (done) return;
+      done = true;
+      clearTimeout(deadline);
+      fallback();
+    });
+  });
+})();
+
+/* ── Reader wiring ──────────────────────────────────────────── */
+document.querySelector('.buttons').addEventListener('click', function(e){
+  var b = e.target.closest('button');
+  if (!b) return;
+  var act = b.getAttribute('data-act');
+  if      (act === 'play')     toggle();
+  else if (act === 'start')    reset(true);
+  else if (act === 'prevword') step(-1);
+  else if (act === 'nextword') step(1);
+  else if (act === 'prevsent') sentenceJump(-1);
+  else if (act === 'nextsent') sentenceJump(1);
+  b.blur();                                    // keep Space bound to play/pause
+});
+
+el.scrub.addEventListener('input', function(){ seek(parseInt(this.value, 10)); });
+el.wpmRange.addEventListener('input', function(){ setWpm(parseInt(this.value, 10), 'range'); });
+el.wpmNum.addEventListener('change',  function(){ setWpm(parseInt(this.value, 10), 'num'); });
+el.sizeRange.addEventListener('input', function(){
+  document.documentElement.style.setProperty('--word-size', this.value + 'px');
+  fitWord();
+});
+
+window.addEventListener('resize', fitWord);
+
+/* ── Keyboard ───────────────────────────────────────────────── */
+document.addEventListener('keydown', function(e){
+  var t       = e.target;
+  var tag     = t && t.tagName;
+  var typing  = tag === 'TEXTAREA' || (tag === 'INPUT' && t.type !== 'range');
+  var onRange = tag === 'INPUT' && t.type === 'range';
+
+  if (e.key === 'Escape'){
+    if (mode === 'read'){ e.preventDefault(); toCompose(); }
+    else if (typing) t.blur();
+    return;
+  }
+
+  if (typing){
+    // Ctrl/Cmd + Enter from the textarea starts reading.
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)){ e.preventDefault(); toRead(); }
+    return;
+  }
+  if (mode !== 'read') return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+  // A focused slider keeps its native arrow behaviour; Space still toggles.
+  if (onRange && e.key !== ' ' && e.key !== 'Spacebar') return;
+
+  switch (e.key){
+    case ' ':
+    case 'Spacebar':   e.preventDefault(); toggle(); break;
+    case 'ArrowLeft':  e.preventDefault(); if (e.shiftKey) sentenceJump(-1); else step(-1); break;
+    case 'ArrowRight': e.preventDefault(); if (e.shiftKey) sentenceJump(1);  else step(1);  break;
+    case 'ArrowUp':    e.preventDefault(); nudgeWpm(e.shiftKey ?  50 :  10); break;
+    case 'ArrowDown':  e.preventDefault(); nudgeWpm(e.shiftKey ? -50 : -10); break;
+    case 'Home':       e.preventDefault(); reset(true); break;
+    default: break;
+  }
+});
+
+/* ── Boot ───────────────────────────────────────────────────── */
+setWpm(300);
+refreshCount();
+render();
+el.input.focus();
+
+// Exposed for verification.
+window.__rsvp = {
+  get idx()      { return idx; },
+  get words()    { return words; },
+  get wpm()      { return wpm; },
+  get playing()  { return playing; },
+  get sentences(){ return sentences; },
+  get notice()   { return el.notice.textContent; },
+  pivotIndex: pivotIndex,
+  insertCopy: insertCopy,
+  seek: seek, play: play, pause: pause, setWpm: setWpm, toRead: toRead
+};
+
+})();
+</script>
+</body>
+</html>
